@@ -1,0 +1,507 @@
+---
+title: "CUNY Data 605 - Final"
+author: "Peter Kowalchuk"
+date: "5/6/2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(purrr)
+library(tidyr)
+library(ggplot2)
+library(Hmisc)
+library(dplyr)
+library(corrplot)
+library(kableExtra)
+```
+
+#Computational Mathematics
+
+#Problem 1
+**Using R, generate a random variable X that has 10,000 random uniform numbers from 1 to N, where N can be any number of your choosing greater than or equal to 6.  Then generate a random variable Y that has 10,000 random normal numbers with a mean of** $\mu = \sigma = (N+1)/2$**.**  
+
+Random Variable X
+```{r}
+N<-8 
+n<-10000
+
+X<-runif(n,min=0,max=N)
+hist(X)
+```
+
+Random Variable Y
+```{r}
+Y<-rnorm(n,(N+1)/2,(N+1)/2)
+hist(Y)
+abline(v=(N+1)/2,col="red")
+```
+
+###Probability
+**Calculate as a minimum the below probabilities a through c.  Assume the small letter "x" is estimated as the median of the X variable, and the small letter "y" is estimated as the 1st quartile of the Y variable.  Interpret the meaning of all probabilities.**
+
+```{r}
+x<-median(X)
+round(x,2)
+
+y<-quantile(Y,0.25)[[1]]
+round(y,2)
+```
+
+a. $P(X>x \ | \ X>y)$
+
+Probability that X is greater than its median given that X is greater than the first quartile of Y
+
+$$P(X>x \ | \ X>y) = \frac{P(X>x \ , \ X>y)}{P(X>y)}$$
+
+
+```{r}
+Pxxandxy<-sum(X>x & X>y)/n #all the X greater than x and greater than y divided by all possible X
+round(Pxxandxy,2)
+
+Pxy<-sum(X>y)/n #all x greater than y divided by all possible X
+round(Pxy,2)
+
+Pxxgivenxy=Pxxandxy/Pxy
+round(Pxxgivenxy,2)
+```
+
+
+b. $P(X>x, Y>y)$
+
+Probability that X is grater than all possible x and Y is greater than all possible y
+
+```{r}
+Pxxyy<-(sum(X>x & Y>y))/n
+round(Pxxyy,2)
+```
+
+c. $P(X<x | X>y)$
+
+Probability of X greater than its median and greater than the first quantile of Y
+
+$$P(X<x \ | \ X>y) = \frac{P(X<x \ , \ X>y)}{P(X>y)}$$
+
+```{r}
+Pxxandxy<-sum(X<x & X>y)/n
+round(Pxxandxy,2)
+
+Pxy<-sum(X>y)/n
+round(Pxy,2)
+
+Pxxgivenxy<-Pxxandxy/Pxy
+round(Pxxgivenxy,2)
+```
+
+###Independance
+**Investigate whether **$P(X>x \ and \ Y>y)=P(X>x)P(Y>y)$ **by building a table and evaluating the marginal and joint probabilities.**
+
+We start by building the contingency table with samples/observation of X and Y
+
+```{r}
+m<-matrix( c(sum(X>x & Y<y),sum(X>x & Y>y), sum(X<x & Y<y),sum(X<x & Y>y)), nrow = 2,ncol = 2)
+m<-cbind(m,c(m[1,1]+m[1,2],m[2,1]+m[2,2]))
+m<-rbind(m,c(m[1,1]+m[2,1],m[1,2]+m[2,2],m[1,3]+m[2,3]))
+contingency<-as.data.frame(m)
+names(contingency) <- c("X>x","X<x", "Total")
+row.names(contingency) <- c("Y<y","Y>y", "Total")
+kable(contingency) %>%
+  kable_styling(bootstrap_options = "bordered")
+```
+
+We can now compute the table with probabilities.
+
+```{r}
+mp<-m/m[3,3]
+contingency_p<-as.data.frame(mp)
+names(contingency_p) <- c("X>x","X<x", "Total")
+row.names(contingency_p) <- c("Y<y","Y>y", "Total")
+kable(round(contingency_p,2)) %>%
+  kable_styling(bootstrap_options = "bordered")
+```
+
+Now if we compute $P(X>x \ and \ Y>y)$ as $P(X>x)P(Y>y)$ we can compare against results in the table
+
+```{r}
+P<-round((sum(X>x)/n)*(sum(Y<y)/n),2)
+P
+round(P,2)==round(mp[1,1],2)
+```
+
+```{r}
+P<-round((sum(X>x)/n)*(sum(Y>y)/n),2)
+P
+round(P,2)==round(mp[2,1],2)
+```
+
+```{r}
+P<-round((sum(X<x)/n)*(sum(Y<y)/n),2)
+P
+round(P,2)==round(mp[1,2],2)
+```
+
+```{r}
+P<-round((sum(X<x)/n)*(sum(Y>y)/n),2)
+P
+round(P,2)==round(mp[2,2],2)
+```
+
+We find that the results are very similar, so we therefore conclude they are in truth independent. (Note: running the X and Y simulation will sometimes give results that are completely equal or very close)
+
+We run both a fisher and a chi-test. In both of these we state a null hypotheses that the two variables are independent, and a alternative stating that there is dependence.
+
+```{r}
+fisher.test(m,simulate.p.value=TRUE)
+```
+
+```{r}
+chisq.test(m, correct=TRUE)
+```
+
+In both cases the p-value is much greater than a reasonable threshold of 0.05, or even 0.1. So we do not reject the null hypothesis of independence and conclude that they are in fact independent (association is not statistically significant). The chi test is better suited for large samples as we have here. (Note: running the X and Y simulation will sometimes give results with p-values at or very close to 1, but in any case they are greater than the reasonable threshold)
+
+#Problem 2
+
+**You are to register for Kaggle.com (free) and compete in the House Prices: Advanced Regression Techniques competition.**  https://www.kaggle.com/c/house-prices-advanced-regression-techniques .  **I want you to do the following.**
+
+**Descriptive and Inferential Statistics. Provide univariate descriptive statistics and appropriate plots for the training data set.  Provide a scatterplot matrix for at least two of the independent variables and the dependent variable. Derive a correlation matrix for any three quantitative variables in the dataset.  Test the hypotheses that the correlations between each pairwise set of variables is 0 and provide an 80% confidence interval.  Discuss the meaning of your analysis.  Would you be worried about familywise error? Why or why not?**
+
+```{r}
+train<-read.csv("data/train.csv",header=TRUE,stringsAsFactors=FALSE)
+```
+
+###Descriptive Statistics
+*Provide univariate descriptive statistics and appropriate plots for the training data set.*
+
+We first identify the labels of the data we are working with.
+
+```{r}
+colnames(train)
+```
+
+Then we run a histogram of all the variables to identify interesting features. For example, the data shows how many homes had their garages built between 1950 and 1980, but then there was a large dip, with a high spike right before 2010, this probably correlates with the number of auto sales in those periods.
+
+```{r fig1, fig.height = 15, fig.width = 10, warnings=FALSE}
+#plot histogram of all numeric variables
+train %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free",ncol=4) +
+  theme( axis.text.x = element_text(angle = 90)) +
+    geom_histogram()
+```
+
+To see the descriptive statistics we can use both the summary and describe functions, they both produce slightly different data. Of particular interest is describe showing the number of nulls.
+
+```{r}
+summary(train)
+describe(train)
+```
+
+###Scatter Plots
+**Provide a scatterplot matrix for at least two of the independent variables and the dependent variable.**
+
+```{r}
+ggplot(train, aes(LotArea, GarageArea)) +
+  geom_point(aes(color=SalePrice)) 
+```
+
+From this plot we can quickly see that homes without a garage have low sales prices. But we can also that the higher priced homes are not necessarily the ones with the highest lot or garage size. 
+
+A scattered plot can also help identify a correlation between basement size and sales price.
+
+```{r}
+ggplot(train, aes(LotArea,BsmtUnfSF)) +
+  geom_point(aes(color=SalePrice)) 
+```
+
+Here best prices seem to be a moderate size basement and lot, not necessarily very large basements or lots. But to keep in mind, basement size can be linked to lot size, something correlation will help identify.
+
+###Correlation
+**Derive a correlation matrix for any three quantitative variables in the dataset.**
+
+```{r}
+correlationData<-dplyr::select(train,SalePrice,LotArea,BsmtUnfSF)
+correlationMatrix<-round(cor(correlationData),4)
+correlationMatrix
+corrplot(correlationMatrix,method ="color")
+```
+
+The matrix shows that in fact there isn't a strong correlation between LotArea and Basement Size, with a correlation very close to zero: -0.0026.    
+We do however find some correlation between these two variables and the Sale Price.
+
+###Hypotheses testing 
+**Test the hypotheses that the correlations between each pairwise set of variables is 0 and provide an 80% confidence interval.  Discuss the meaning of your analysis.**  
+
+Sale Price vs Lot Area
+
+With a low P value, we are confident the correlation between these two variables is not zero, and we are 80% confident it is between 0.2323391 and 0.2947946
+
+```{r}
+cor.test(correlationData$SalePrice,correlationData$LotArea, conf.level = 0.8)
+```
+
+Sale Price vs Basement Size
+
+With a low P value, we are confident the correlation between these two variables is not zero, and we are 80% confident it is between 0.1822292 and 0.2462680
+
+```{r}
+cor.test(correlationData$SalePrice,correlationData$BsmtUnfSF, conf.level = 0.8)
+```
+
+Lot Area vs Basement Size
+
+With a high P value, we are confident the correlation between these two variables is in fact zero, and we are 80% confident it is between -0.03617682 and 0.03094600
+
+```{r}
+cor.test(correlationData$LotArea,correlationData$BsmtUnfSF, conf.level = 0.8)
+```
+
+**Would you be worried about familywise error? Why or why not?**
+
+Familywise error is that of making at least one "type I" error", or a false positive, rejection of a true null. In our two first cases, the P value is extremely small. Type I error happens when the null is rejected or the P value being smaller than a set threshold. But in our case the P value is very small, so any reasonable threshold (0.1, 0.05, etc.) setting will almost certainly be breached. So I would not be worried about committing a type one error, the null hypothesis can very certainly be rejected. In the last case, now the P value is very large, so again we are far from any reasonable threshold. In this case we can certainly not reject the null.
+
+###Linear Algebra and Correlation.
+**Linear Algebra and Correlation.  Invert your correlation matrix from above. (This is known as the precision matrix and contains variance inflation factors on the diagonal.) Multiply the correlation matrix by the precision matrix, and then multiply the precision matrix by the correlation matrix. Conduct LU decomposition on the matrix.**
+
+**Invert your correlation matrix from above.**
+
+```{r}
+precisionMatrix<-solve(correlationMatrix)
+round(precisionMatrix,4)
+```
+
+**Multiply the correlation matrix by the precision matrix, and then multiply the precision matrix by the correlation matrix.**
+
+```{r}
+round(correlationMatrix %*% precisionMatrix,4)
+```
+
+```{r}
+round(precisionMatrix %*% correlationMatrix,4)
+```
+
+**Conduct LU decomposition on the matrix.**
+
+We use a function from assignment 2
+
+```{r}
+solve.LDU<-function(A,D=FALSE) {
+  #build unity matrix b
+  b<-matrix(nrow = nrow(A),ncol = ncol(A))
+  for(j in 1:ncol(A)) {
+    for(i in 1:nrow(A)) {
+      if(i==j) b[i,j]<-1  else b[i,j]=0
+    }
+  }
+  #alternatively b could have been defined by b<-diag(ncol(A))
+  Ab<-cbind(A,b)
+  for(row in 1:(nrow(Ab)-1)){
+    col=row
+    for(next.row in (row+1):nrow(Ab)) {
+      multiplier<-Ab[next.row,col]/Ab[row,col]
+      Ab[next.row,]<-Ab[next.row,]-(multiplier*Ab[row,])
+    }
+  }
+  ru<-Ab[,1:ncol(A)]
+  rl<-solve(Ab[,(ncol(A)+1):ncol(Ab)])
+  if(D) {
+      Ab<-ru
+      rd<-diag(diag(ru))
+      for(row in 1:nrow(Ab)) {
+        Ab[row,]=Ab[row,]/Ab[row,row]  
+      }
+      rup<-Ab
+      result<-list(rl,rd,rup)
+      return(result)
+  } else {
+      result<-list(rl,ru)
+      return(result)
+  }
+}
+
+r<-solve.LDU(correlationMatrix)
+L<-r[[1]]
+U<-r[[2]]
+L
+U
+```
+
+We can confirm the decomposition by comparing to our original matrix correlationMatrix
+
+```{r}
+round(L %*% U ,4)== round(correlationMatrix,4)
+```
+
+###Calculus-Based Probability & Statistics.
+**Calculus-Based Probability & Statistics.  Many times, it makes sense to fit a closed form distribution to data.  Select a variable in the Kaggle.com training dataset that is skewed to the right, shift it so that the minimum value is absolutely above zero if necessary.  Then load the MASS package and run fitdistr to fit an exponential probability density function.  (See  https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/fitdistr.html ).  Find the optimal value of ** $\lambda$ **for this distribution, and then take 1000 samples from this exponential distribution using this value  (e.g., rexp(1000,**$\lambda$ **)).  Plot a histogram and compare it with a histogram of your original variable.   Using the exponential pdf, find the 5th and 95th percentiles using the cumulative distribution function (CDF).   Also generate a 95% confidence interval from the empirical data, assuming normality.  Finally, provide the empirical 5th percentile and 95th percentile of the data.  Discuss.**
+
+**Many times, it makes sense to fit a closed form distribution to data.  Select a variable in the Kaggle.com training dataset that is skewed to the right, shift it so that the minimum value is absolutely above zero if necessary.  Then load the MASS package and run fitdistr to fit an exponential probability density function.**
+
+```{r}
+toFit<-train$GrLivArea
+min(toFit)
+```
+
+Selected GrLivArea and found a shift is not necessary.
+
+**Then load the MASS package and run fitdistr to fit an exponential probability density function.**
+
+```{r}
+library(MASS)
+
+fit <- fitdistr(toFit, "exponential")
+fit
+```
+
+**Find the optimal value of ** $\lambda$ **for this distribution, and then take 1000 samples from this exponential distribution using this value**
+
+```{r}
+l<-fit$estimate
+sim<- rexp(1000,l)
+```
+
+**Plot a histogram and compare it with a histogram of your original variable.**
+
+```{r}
+hist(sim,breaks = 100)
+hist(toFit,breaks=100)
+
+sim.df <- data.frame(length = sim)
+toFit.df <- data.frame(length = toFit)
+
+sim.df$from <- 'sim'
+toFit.df$from <- 'toFit'
+
+both.df <- rbind(sim.df,toFit.df)
+
+ggplot(both.df, aes(length, fill = from)) + geom_density(alpha = 0.2)
+```
+
+**Using the exponential pdf, find the 5th and 95th percentiles using the cumulative distribution function (CDF).**
+
+```{r}
+quantile(sim, probs=c(0.05, 0.95))
+```
+
+**Also generate a 95% confidence interval from the empirical data, assuming normality.**
+
+```{r}
+mean(toFit)
+normal<-rnorm(length(toFit),mean(toFit),sd(toFit))
+hist(normal)
+quantile(normal, probs=c(0.05, 0.95))
+
+normal.df <- data.frame(length = normal)
+
+normal.df$from <- 'normal'
+
+all.df <- rbind(both.df,normal.df)
+
+ggplot(all.df, aes(length, fill = from)) + geom_density(alpha = 0.2)
+```
+
+**Finally, provide the empirical 5th percentile and 95th percentile of the data.  Discuss.**
+
+```{r}
+quantile(toFit, probs=c(0.05, 0.95))
+```
+
+From this analysis it appears the data select was not very right skew. The exponential simulation does not match our data very well, rather, our selected empirical data matches the normal distribution a lot better. This can be seen in the final density plot, but also on the confidence interval where the limits are much closer than for the exponential approximation.
+
+###Modeling
+**Modeling.  Build some type of multiple regression  model and submit your model to the competition board.  Provide your complete model summary and results with analysis.  Report your Kaggle.com user name and score.**
+
+We start by selecting numeric variables using the distribution plots done before
+
+```{r fig.height = 15, fig.width = 10}
+model_input<-dplyr::select(train, GrLivArea, BedroomAbvGr,BsmtFinSF1,BsmtUnfSF,GarageArea,GarageCars,GarageYrBlt,GrLivArea,LotFrontage,LotArea,Fireplaces,YearBuilt,OverallQual)
+
+model_input$SalePrice<-log(train$SalePrice)
+
+gather(model_input,"VARIABLE","VALUE",-SalePrice) %>%
+ggplot(aes(x=VALUE,y=SalePrice)) + 
+  geom_point() + facet_wrap(~VARIABLE,scale="free",ncol=4) + 
+  labs(x="Variables", y="Sale Price") + 
+theme(axis.text.x=element_text(angle=90))
+```
+
+
+```{r}
+plotlm<-function(lm) {
+  print(summary(lm))
+  plot(fitted(lm),resid(lm))
+  abline(0, 0)
+  hist(resid(lm),breaks = 100)
+  qqnorm(resid(lm))
+  qqline(resid(lm))  
+}
+
+lm1<-lm(SalePrice ~ GrLivArea+BedroomAbvGr+BsmtFinSF1+BsmtUnfSF+GarageArea+GarageCars+GarageYrBlt+GrLivArea+LotFrontage+LotArea+Fireplaces+YearBuilt+OverallQual,data=model_input)
+
+plotlm(lm1)
+
+```
+
+We find several variables with high P values. We work our way back by eliminating these and assessing the resulting model.
+
+```{r}
+lm2<-lm(SalePrice ~ GrLivArea+BsmtFinSF1+GarageCars+GrLivArea+LotArea+Fireplaces+YearBuilt+OverallQual+BedroomAbvGr,data=model_input)
+
+plotlm(lm2)
+```
+
+
+```{r}
+correlationData<-dplyr::select(train,GrLivArea,BsmtFinSF1,GarageCars,GrLivArea,LotArea,Fireplaces,YearBuilt,OverallQual,BedroomAbvGr)
+correlationMatrix<-round(cor(correlationData),4)
+correlationMatrix
+corrplot(correlationMatrix,method ="color",type="upper")
+```
+
+```{r}
+lm3<-lm(SalePrice ~ BsmtFinSF1+GarageCars+GrLivArea+LotArea+Fireplaces+YearBuilt+OverallQual,data=model_input)
+
+plotlm(lm3)
+```
+
+```{r}
+correlationData<-dplyr::select(train,BsmtFinSF1,GarageCars,GrLivArea,LotArea,Fireplaces,YearBuilt,OverallQual)
+correlationMatrix<-round(cor(correlationData),4)
+correlationMatrix
+corrplot(correlationMatrix,method ="color",type="upper")
+```
+
+Model 2 and 3 have very similar results, we decide to submit model 2. Not always a model with more features is best, but in this case we do decide on this one.
+
+```{r}
+test<-read.csv("data/test.csv",header=TRUE,stringsAsFactors=FALSE)
+```
+
+```{r}
+test2<-dplyr::select(test,GrLivArea,BsmtFinSF1,GarageCars,GrLivArea,LotArea,Fireplaces,YearBuilt,OverallQual,BedroomAbvGr)
+predictions<-predict(lm2,test)
+test2$SalePrice <- round(exp(predictions))
+test2$Id<-test$Id
+test2$SalePrice[is.na(test2$SalePrice)] <- median(test2$SalePrice, na.rm = TRUE)
+
+tblTable<-tbl_df(test2)
+tblTable %>% kable() %>% kable_styling() %>% scroll_box(width = "800px", height = "400px")
+write.csv(dplyr::select(test2, Id, SalePrice), "data/predictions.csv", row.names = FALSE)
+```
+
+###Kaglee submittion
+
+Kaggle UserID: PKowalchuk
+
+![](kaggle.png)
+
